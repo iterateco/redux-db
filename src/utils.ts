@@ -44,7 +44,7 @@ export const isValidID = (id: any) => {
 
 // Ensures that the given id is a string
 export const asID = (id: string | number) => {
-    return typeof id === "string" ? id : id.toString();
+    return id;
 }
 
 export const toObject = <T>(a: T[], key: (a: T) => string) => {

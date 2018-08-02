@@ -39,7 +39,7 @@ exports.isValidID = function (id) {
 };
 // Ensures that the given id is a string
 exports.asID = function (id) {
-    return typeof id === "string" ? id : id.toString();
+    return id;
 };
 exports.toObject = function (a, key) {
     return a.reduce(function (o, v) { o[key(v)] = v; return o; }, {});
