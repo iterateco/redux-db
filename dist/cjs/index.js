@@ -6,5 +6,5 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var Database_1 = require("./Database");
 exports.createDatabase = function (schema, options) { return new Database_1.default(schema, options); };
 __export(require("./constants"));
-__export(require("./models"));
-__export(require("./DefaultModelFactory"));
+__export(require("./models").default);
+exports.DefaultModelFactory = require("./DefaultModelFactory").default;
