@@ -37,7 +37,7 @@ export var isValidID = function (id) {
 };
 // Ensures that the given id is a string
 export var asID = function (id) {
-    return typeof id === "string" ? id : id.toString();
+    return id;
 };
 export var toObject = function (a, key) {
     return a.reduce(function (o, v) { o[key(v)] = v; return o; }, {});
@@ -46,13 +46,13 @@ export var mergeIds = function (source, second, unique) {
     var hash = {};
     var i;
     for (i = 0; i < source.length; i++)
-        hash[source[i]] = true;
+        hash[source[i]] = source[i];
     for (i = 0; i < second.length; i++) {
-        if (unique && hash[second[i]])
+        if (unique && hash[second[i]] != null)
             throw new Error("Id merge operation violates unique constraint for id: \"" + second[i] + "\"");
-        hash[second[i]] = true;
+        hash[second[i]] = second[i];
     }
-    return Object.keys(hash);
+    return Object.values ? Object.values(hash) : Object.keys(hash).map(k => hash[k]);
 };
 // Compares two objects for simple equality.
 // Arrays are compared only at first level.

@@ -18,6 +18,9 @@ exports.ensureArray = function (obj) {
     else
         return [obj];
 };
+exports.isObject = function (value) {
+    return value !== null && !Array.isArray(value) && typeof value === "object";
+};
 exports.ensureParam = function (name, value) {
     if (value === undefined)
         throw new Error("Missing a valid value for the argument \"" + name + "\"");
@@ -27,6 +30,12 @@ exports.ensureParamString = function (name, value) {
     if (value === undefined || value === null || typeof value !== "string" || value.length === 0)
         throw new Error("Missing a valid string for the argument \"" + name + "\"");
     return value;
+};
+exports.ensureParamObject = function (name, value) {
+    var param = exports.ensureParam(name, value);
+    if (!exports.isObject(param))
+        throw new Error("Missing a valid object for the argument \"" + name + "\"");
+    return param;
 };
 exports.ensureID = function (id) {
     if (!exports.isValidID(id))
@@ -39,7 +48,7 @@ exports.isValidID = function (id) {
 };
 // Ensures that the given id is a string
 exports.asID = function (id) {
-    return typeof id === "string" ? id : id.toString();
+    return id;
 };
 exports.toObject = function (a, key) {
     return a.reduce(function (o, v) { o[key(v)] = v; return o; }, {});
@@ -48,13 +57,13 @@ exports.mergeIds = function (source, second, unique) {
     var hash = {};
     var i;
     for (i = 0; i < source.length; i++)
-        hash[source[i]] = true;
+        hash[source[i]] = source[i];
     for (i = 0; i < second.length; i++) {
-        if (unique && hash[second[i]])
+        if (unique && hash[second[i]] != null)
             throw new Error("Id merge operation violates unique constraint for id: \"" + second[i] + "\"");
-        hash[second[i]] = true;
+        hash[second[i]] = second[i];
     }
-    return Object.keys(hash);
+    return Object.values ? Object.values(hash) : Object.keys(hash).map(k => hash[k]);
 };
 // Compares two objects for simple equality.
 // Arrays are compared only at first level.
