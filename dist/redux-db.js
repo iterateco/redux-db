@@ -483,20 +483,21 @@ define("models/TableSchemaModel", ["require", "exports", "constants", "utils", "
             if (!ctx.output[this.name])
                 ctx.output[this.name] = { ids: [], byId: {}, indexes: {} };
             return utils.ensureArray(data).map(function (obj) {
-                if (typeof obj !== "object")
+                if (!utils.isObject(obj))
                     throw new Error("Failed to normalize data. Given record is not a plain object.");
-                var normalizeHook = _this.db.getNormalizer(_this.name);
-                if (normalizeHook)
-                    obj = normalizeHook(obj, ctx);
-                var pk = ctx.normalizePKs ? _this._normalizePrimaryKey(obj) : _this._getPrimaryKey(obj);
+                var subject = obj;
+                var normalizer = _this.db.getNormalizer(_this.name);
+                if (normalizer)
+                    subject = normalizer(subject, ctx);
+                var pk = ctx.normalizePKs ? _this._normalizePrimaryKey(subject) : _this._getPrimaryKey(subject);
                 if (!pk)
                     throw new Error("Failed to normalize primary key for record of type \"" + _this.name + "\"."
                         + " Make sure record(s) have a primary key value before trying to insert or update a table.");
-                var fks = _this.getForeignKeys(obj);
+                var fks = _this.getForeignKeys(subject);
                 var tbl = ctx.output[_this.name];
                 if (!tbl.byId[pk])
                     tbl.ids.push(pk);
-                var record = tbl.byId[pk] = __assign({}, obj);
+                var record = tbl.byId[pk] = __assign({}, subject);
                 fks.forEach(function (fk) {
                     // if the FK is an object, then normalize it and replace object with it's PK.
                     if (typeof fk.value === "object" && fk.refTable) {
@@ -591,7 +592,7 @@ define("models/TableSchemaModel", ["require", "exports", "constants", "utils", "
         /// Normalizes the given record with a primary key field. Returns the key value.
         TableSchemaModel.prototype._normalizePrimaryKey = function (record) {
             var pk = this._getPrimaryKey(record);
-            // Invoke the "onMissingPk" hook if PK not found.
+            // Invoke the "onGeneratePK" hook if PK not found.
             if (!pk) {
                 var generatedPk = this.db.getPkGenerator(this.name)(record, this);
                 if (generatedPk) {
@@ -599,7 +600,7 @@ define("models/TableSchemaModel", ["require", "exports", "constants", "utils", "
                     if (this._primaryKeyFields.length === 1)
                         record[this._primaryKeyFields[0].propName] = generatedPk;
                     // TODO: Handle multiple PK field defs.
-                    // We may need the "onMissingPK" hook to return an object defining each key value.
+                    // We may need the "onGeneratePK" hook to return an object defining each key value.
                     // BUT this seems like a rare scenario..
                     pk = generatedPk;
                 }
@@ -750,6 +751,9 @@ define("utils", ["require", "exports"], function (require, exports) {
         else
             return [obj];
     };
+    exports.isObject = function (value) {
+        return value !== null && !Array.isArray(value) && typeof value === "object";
+    };
     exports.ensureParam = function (name, value) {
         if (value === undefined)
             throw new Error("Missing a valid value for the argument \"" + name + "\"");
@@ -759,6 +763,12 @@ define("utils", ["require", "exports"], function (require, exports) {
         if (value === undefined || value === null || typeof value !== "string" || value.length === 0)
             throw new Error("Missing a valid string for the argument \"" + name + "\"");
         return value;
+    };
+    exports.ensureParamObject = function (name, value) {
+        var param = exports.ensureParam(name, value);
+        if (!exports.isObject(param))
+            throw new Error("Missing a valid object for the argument \"" + name + "\"");
+        return param;
     };
     exports.ensureID = function (id) {
         if (!exports.isValidID(id))
@@ -864,7 +874,7 @@ define("DatabaseSession", ["require", "exports", "errors", "utils"], function (r
     }());
     exports.default = DatabaseSession;
 });
-define("Database", ["require", "exports", "DatabaseSession", "DefaultModelFactory", "errors", "utils"], function (require, exports, DatabaseSession_1, DefaultModelFactory_2, errors_4, utils_6) {
+define("Database", ["require", "exports", "DatabaseSession", "DefaultModelFactory", "utils"], function (require, exports, DatabaseSession_1, DefaultModelFactory_2, utils_6) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var defaultOptions = {
@@ -891,7 +901,7 @@ define("Database", ["require", "exports", "DatabaseSession", "DefaultModelFactor
             this.getRecordComparer = function (schemaName) {
                 return getMappedFunction(_this.options.onRecordCompare, schemaName, utils_6.isEqual);
             };
-            utils_6.ensureParam("schema", schema);
+            utils_6.ensureParamObject("schema", schema);
             this.options = __assign({}, defaultOptions, options);
             this.factory = this.options.factory || new DefaultModelFactory_2.default();
             this.tables = Object.keys(schema).map(function (tableName) {
@@ -930,14 +940,60 @@ define("Database", ["require", "exports", "DatabaseSession", "DefaultModelFactor
             });
             return session.tables;
         };
-        Database.prototype.selectTable = function (tableState, schemaName) {
-            var _a;
-            var name = schemaName || tableState.name;
-            if (!name)
-                throw new Error(errors_4.default.stateTableUndefined());
-            return this.selectTables((_a = {}, _a[name] = tableState, _a))[name];
-        };
         return Database;
     }());
     exports.default = Database;
+});
+// tslint:disable:object-literal-sort-keys
+define("__tests__/Database.spec", ["require", "exports", "constants", "Database"], function (require, exports, constants_5, Database_2) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    describe("constructor", function () {
+        test("throws if no schema given", function () {
+            var db = Database_2.default;
+            expect(function () { return new db(); }).toThrow();
+        });
+        test("throws if invalid schema given", function () {
+            var db = Database_2.default;
+            expect(function () { return new db([]); }).toThrow();
+        });
+        test("creates table schemas", function () {
+            return expect(new Database_2.default({
+                table1: {},
+                table2: {}
+            }).tables).toHaveLength(2);
+        });
+        describe("with custom model factory", function () {
+            var mockSchema = {
+                connect: jest.fn()
+            };
+            var factory = {
+                newTableSchema: jest.fn().mockReturnValue(mockSchema),
+                newTableModel: jest.fn(),
+                newRecordModel: jest.fn(),
+                newRecordSetModel: jest.fn()
+            };
+            var db = new Database_2.default({ table1: {} }, { factory: factory });
+            test("calls factory.newTableSchema", function () {
+                return expect(factory.newTableSchema).toHaveBeenCalled();
+            });
+            test("calls connect on new table schema", function () {
+                return expect(mockSchema.connect).toHaveBeenCalled();
+            });
+        });
+    });
+    describe("getNormalizer", function () {
+        var _a, _b;
+        var normalizer = jest.fn(function (val) { return val; });
+        var tableName = "test";
+        var db = new Database_2.default((_a = {},
+            _a[tableName] = { id: { type: constants_5.TYPE_PK } },
+            _a), { onNormalize: (_b = {}, _b[tableName] = normalizer, _b) });
+        var state = db.reduce();
+        var _c = tableName, table = db.createSession(state).tables[_c];
+        table.insert({ id: 1 });
+        test("custom normalizer called", function () {
+            return expect(normalizer).toHaveBeenCalled();
+        });
+    });
 });
