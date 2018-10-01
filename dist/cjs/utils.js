@@ -18,6 +18,9 @@ exports.ensureArray = function (obj) {
     else
         return [obj];
 };
+exports.isObject = function (value) {
+    return value !== null && !Array.isArray(value) && typeof value === "object";
+};
 exports.ensureParam = function (name, value) {
     if (value === undefined)
         throw new Error("Missing a valid value for the argument \"" + name + "\"");
@@ -27,6 +30,12 @@ exports.ensureParamString = function (name, value) {
     if (value === undefined || value === null || typeof value !== "string" || value.length === 0)
         throw new Error("Missing a valid string for the argument \"" + name + "\"");
     return value;
+};
+exports.ensureParamObject = function (name, value) {
+    var param = exports.ensureParam(name, value);
+    if (!exports.isObject(param))
+        throw new Error("Missing a valid object for the argument \"" + name + "\"");
+    return param;
 };
 exports.ensureID = function (id) {
     if (!exports.isValidID(id))
